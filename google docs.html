@@ -1,0 +1,220 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Docs off-line</title>
+<style>
+:root{ --bg:#0f1724; --panel:#0b1220; --muted:#9aa6b2; --accent:#22c55e; --card:#0e1720; --glass: rgba(255,255,255,0.03); color-scheme: dark; }
+*{box-sizing:border-box}
+html,body{height:100%; margin:0; font-family:Inter,system-ui,Segoe UI,Roboto,Arial; background:linear-gradient(180deg,#081022 0%, #07121a 100%); color:#e6eef6}
+.app{display:flex;flex-direction:column;height:100vh;padding:12px;gap:12px}
+header{display:flex;align-items:center;gap:12px}
+.title{display:flex;flex-direction:column}
+#docTitle{background:transparent;border:0;color:#e6eef6;font-size:1.05rem;font-weight:600;outline:none}
+.meta{font-size:0.8rem;color:var(--muted)}
+.toolbar{display:flex;gap:6px;flex-wrap:wrap}
+button, .tool {background:var(--glass);border:1px solid rgba(255,255,255,0.03);color:inherit;padding:8px;border-radius:8px;cursor:pointer}
+button:hover{opacity:0.95}
+.tool[aria-pressed="true"]{box-shadow:0 0 0 2px rgba(34,197,94,0.12)}
+.main{display:flex;gap:12px;flex:1;align-items:stretch}
+.editorWrap{flex:1;display:flex;flex-direction:column;background:linear-gradient(180deg, rgba(255,255,255,0.02), transparent);border-radius:12px;padding:12px;border:1px solid rgba(255,255,255,0.03)}
+#editor{flex:1;outline:none;padding:12px;border-radius:8px;background:transparent;min-height:200px;overflow:auto}
+#editor:focus{box-shadow:0 0 0 3px rgba(34,197,94,0.06)}
+aside{width:320px;min-width:220px;max-width:420px;background:var(--card);padding:12px;border-radius:12px;border:1px solid rgba(255,255,255,0.03);display:flex;flex-direction:column;gap:12px}
+.sectionTitle{font-size:0.9rem;color:var(--muted);margin-bottom:8px}
+.row{display:flex;gap:8px}
+input[type="search"], input[type="file"], select{width:100%;padding:8px;border-radius:8px;border:1px solid rgba(255,255,255,0.03);background:transparent;color:inherit}
+.historyList{max-height:240px;overflow:auto;border-radius:8px;padding:6px;background:rgba(255,255,255,0.01)}
+.historyItem{padding:8px;border-radius:8px;margin-bottom:6px;border:1px dashed rgba(255,255,255,0.02);cursor:pointer}
+.small{font-size:0.85rem;color:var(--muted)}
+footer{display:flex;justify-content:space-between;align-items:center;font-size:0.85rem;color:var(--muted)}
+.kbd{background:rgba(255,255,255,0.03);padding:2px 6px;border-radius:6px;border:1px solid rgba(255,255,255,0.02);font-size:0.8rem}
+.danger{background:rgba(255,30,60,0.06);border:1px solid rgba(255,30,60,0.12)}
+.hidden{display:none}
+.colorInput{width:36px;height:36px;padding:0;border-radius:8px;border:1px solid rgba(255,255,255,0.03);cursor:pointer}
+@media (max-width:900px){aside{display:none}}
+</style>
+</head>
+<body>
+<div class="app" role="application" aria-label="Docs off-line">
+  <header>
+    <div class="title">
+      <input id="docTitle" value="Sem título" />
+      <div class="meta"><span id="savedStatus">—</span> · <span id="sizeInfo">0 bytes</span></div>
+    </div>
+    <div style="flex:1"></div>
+    <div class="toolbar" aria-label="Barra de ferramentas">
+      <button class="tool" onclick="exec('bold')" title="Negrito — Ctrl+B"><b>B</b></button>
+      <button class="tool" onclick="exec('italic')" title="Itálico — Ctrl+I"><i>I</i></button>
+      <button class="tool" onclick="exec('underline')" title="Sublinhado — Ctrl+U"><u>U</u></button>
+      <button class="tool" onclick="exec('insertUnorderedList')" title="Lista">• List</button>
+      <button class="tool" onclick="exec('formatBlock','h2')" title="Título">H2</button>
+      <button class="tool" onclick="exec('formatBlock','p')" title="Parágrafo">P</button>
+      <button class="tool" onclick="toggleFullscreen()" title="Tela cheia">⤢</button>
+      <button class="tool" id="saveBtn" onclick="saveNow()" title="Salvar (Ctrl+S)">Salvar</button>
+      <button class="tool" onclick="undo()" title="Desfazer (Ctrl+Z)">↺</button>
+      <button class="tool" onclick="redo()" title="Refazer (Ctrl+Y)">↻</button>
+      <label class="tool" title="Cor do texto">A <input id="colorText" class="colorInput" type="color" value="#ffffff" onchange="applyTextColor(this.value)" /></label>
+      <label class="tool" title="Marca-texto">🖊️ <input id="colorHighlight" class="colorInput" type="color" value="#fff176" onchange="applyHighlight(this.value)" /></label>
+      <label class="tool" title="Tamanho da fonte (seleção)">Tamanho
+        <select id="fontSizeSel" onchange="applyFontSize(this.value)">
+          <option value="">—</option>
+          <option value="10px">10</option>
+          <option value="12px">12</option>
+          <option value="14px">14</option>
+          <option value="16px" selected>16</option>
+          <option value="18px">18</option>
+          <option value="20px">20</option>
+          <option value="24px">24</option>
+          <option value="32px">32</option>
+        </select>
+      </label>
+      <button class="tool" onclick="printDoc()" title="Imprimir / Salvar como PDF">Imprimir / PDF</button>
+      <button class="tool" onclick="exportDocx()" title="Exportar para Word (.docx/.doc)">DOCX</button>
+    </div>
+  </header>
+  <div class="main">
+    <div class="editorWrap">
+      <div id="editor" contenteditable="true" spellcheck="true" aria-label="Editor de texto"></div>
+    </div>
+    <aside>
+      <div>
+        <div class="sectionTitle">Ações rápidas</div>
+        <div class="row" style="margin-bottom:8px">
+          <button class="tool" onclick="exportTxt()">Baixar .txt</button>
+          <button class="tool" onclick="exportHtml()">Baixar .html</button>
+          <button class="tool" onclick="exportpdf()">Baixar .pdf</button>
+        </div>
+        <div class="row">
+          <label class="tool" style="flex:1;justify-content:center;align-items:center;display:flex;gap:8px;cursor:pointer">
+            Importar
+            <input id="fileIn" type="file" class="hidden" accept=".pdf,.txt,.html,.htm,.doc,.docx" onchange="importFile(event)">
+          </label>
+          <button class="tool danger" onclick="clearDoc()" title="Apagar tudo">Limpar</button>
+        </div>
+      </div>
+      <div>
+        <div class="sectionTitle">Histórico (instantâneos)</div>
+        <div class="small">Snapshots automáticos (máx <span id="maxSnap">30</span>)</div>
+        <div class="historyList" id="historyList" aria-live="polite"></div>
+        <div style="display:flex;gap:8px;margin-top:8px">
+          <button class="tool" onclick="takeSnapshot()">Salvar snapshot</button>
+          <button class="tool" onclick="purgeHistory()">Limpar histórico</button>
+        </div>
+      </div>
+      <div>
+        <div class="sectionTitle">Buscar / Substituir</div>
+        <input id="findInput" placeholder="Buscar texto..." oninput="findHighlight()" />
+        <div style="display:flex;gap:8px;margin-top:8px">
+          <button class="tool" onclick="findPrev()">◀</button>
+          <button class="tool" onclick="findNext()">▶</button>
+          <button class="tool" onclick="clearHighlights()">✖</button>
+        </div>
+        <input id="replaceInput" placeholder="Substituir..." style="margin-top:6px" oninput="replaceText()" />
+      </div>
+    </aside>
+  </div>
+  <footer>
+    <div>Docs offline • by João</div>
+    <div id="footStatus">Pronto</div>
+  </footer>
+</div>
+
+<script>
+// ====== Funções básicas de formatação =====
+function exec(cmd,arg=null){document.execCommand(cmd,false,arg)}
+function applyTextColor(c){document.execCommand('foreColor',false,c)}
+function applyHighlight(c){document.execCommand('hiliteColor',false,c)}
+function applyFontSize(s){if(s)document.execCommand('fontSize',false,'7'); // trick size
+let f=window.getSelection().focusNode.parentElement; f.style.fontSize=s}
+function toggleFullscreen(){document.documentElement.requestFullscreen()}
+
+// ===== Undo / Redo =====
+function undo(){document.execCommand('undo')}
+function redo(){document.execCommand('redo')}
+
+// ===== Salvar / Exportar =====
+function saveNow(){localStorage.setItem('doc',editor.innerHTML); localStorage.setItem('title',docTitle.value); updateStatus()}
+function exportTxt(){let blob=new Blob([editor.innerText],{type:"text/plain"}); downloadBlob(blob,docTitle.value+".txt")}
+function exportHtml(){let blob=new Blob([editor.innerHTML],{type:"text/html"}); downloadBlob(blob,docTitle.value+".html")}
+function downloadBlob(blob,filename){let a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=filename;a.click(); URL.revokeObjectURL(a.href)}
+function printDoc(){let w=window.open(); w.document.write(editor.innerHTML); w.document.close(); w.print()}
+function exportDocx(){alert('Export DOCX ainda simplificado. Use HTML export.')}
+
+// ===== Histórico / Snapshots =====
+let snapshots=[],maxSnapshots=30
+function takeSnapshot(){if(snapshots.length>=maxSnapshots)snapshots.shift(); snapshots.push(editor.innerHTML); renderHistory()}
+function renderHistory(){let list=document.getElementById('historyList'); list.innerHTML=''; snapshots.forEach((s,i)=>{let div=document.createElement('div');div.className='historyItem';div.textContent='Snapshot '+(i+1); div.onclick=()=>{editor.innerHTML=s}; list.appendChild(div)})}
+function purgeHistory(){snapshots=[];renderHistory()}
+
+// ===== Importar / limpar =====
+function importFile(e){let f=e.target.files[0]; if(!f) return; let r=new FileReader(); r.onload=function(){editor.innerHTML=r.result}; r.readAsText(f)}
+function clearDoc(){if(confirm('Apagar todo o documento?')) editor.innerHTML=''}
+
+// ===== Buscar / Substituir =====
+let highlights=[],currentHighlight=0
+function findHighlight(){clearHighlights(); let val=document.getElementById('findInput').value; if(!val)return; let inner=editor.innerHTML; let regex=new RegExp(val,'gi'); editor.innerHTML=inner.replace(regex,m=>`<mark class="search">${m}</mark>`); highlights=editor.querySelectorAll('mark.search'); currentHighlight=0; if(highlights[0])scrollToMark(highlights[0])}
+function scrollToMark(m){m.scrollIntoView({behavior:'smooth',block:'center'})}
+function findNext(){if(!highlights.length)return; currentHighlight=(currentHighlight+1)%highlights.length; scrollToMark(highlights[currentHighlight])}
+function findPrev(){if(!highlights.length)return; currentHighlight=(currentHighlight-1+highlights.length)%highlights.length; scrollToMark(highlights[currentHighlight])}
+function clearHighlights(){highlights.forEach(m=>{m.outerHTML=m.innerText}); highlights=[]}
+
+// ===== Autosave =====
+function scheduleSave(){saveNow()}
+const editor=document.getElementById('editor');
+const docTitle=document.getElementById('docTitle');
+docTitle.addEventListener('input',scheduleSave);
+editor.addEventListener('input',scheduleSave);
+
+// ===== Redimensionar / Mover imagens =====
+let selectedImages=[]
+function enableAdvancedImageEditing(){const imgs=editor.querySelectorAll('img:not(.adv-edit)')
+imgs.forEach(img=>{img.classList.add('adv-edit'); img.style.maxWidth='100%'; img.style.height='auto'; img.style.cursor='move';
+const wrapper=document.createElement('div'); wrapper.className='img-adv-wrapper';
+wrapper.style.display='inline-block'; wrapper.style.position='relative';
+wrapper.style.border='1px dashed rgba(34,197,94,0.5)'; wrapper.style.padding='2px'; wrapper.style.margin='2px';
+wrapper.style.minWidth='20px'; wrapper.style.minHeight='20px'; wrapper.style.boxSizing='border-box'; wrapper.style.userSelect='none';
+img.parentNode.insertBefore(wrapper,img); wrapper.appendChild(img);
+const directions=['nw','n','ne','e','se','s','sw','w'];
+directions.forEach(dir=>{const handle=document.createElement('div');handle.className='resize-handle '+dir;
+handle.style.position='absolute';handle.style.width='10px';handle.style.height='10px';
+handle.style.background='rgba(34,197,94,0.8)';handle.style.borderRadius='50%';
+handle.style.cursor=dir+'-resize';switch(dir){case'nw':handle.style.left='-5px';handle.style.top='-5px';break;
+case'n':handle.style.top='-5px';handle.style.left='50%';handle.style.transform='translateX(-50%)';break;
+case'ne':handle.style.right='-5px';handle.style.top='-5px';break;
+case'e':handle.style.right='-5px';handle.style.top='50%';handle.style.transform='translateY(-50%)';break;
+case'se':handle.style.right='-5px';handle.style.bottom='-5px';break;
+case's':handle.style.bottom='-5px';handle.style.left='50%';handle.style.transform='translateX(-50%)';break;
+case'sw':handle.style.left='-5px';handle.style.bottom='-5px';break;
+case'w':handle.style.left='-5px';handle.style.top='50%';handle.style.transform='translateY(-50%)';break;}
+handle.addEventListener('mousedown',e=>{e.stopPropagation(); e.preventDefault();
+const startX=e.clientX,startY=e.clientY,startWidth=wrapper.offsetWidth,startHeight=wrapper.offsetHeight,startLeft=wrapper.offsetLeft,startTop=wrapper.offsetTop;
+function onMouseMove(ev){let dx=ev.clientX-startX,dy=ev.clientY-startY;
+if(dir.includes('e')) wrapper.style.width=(startWidth+dx)+'px';
+if(dir.includes('s')) wrapper.style.height=(startHeight+dy)+'px';
+if(dir.includes('w')){wrapper.style.width=(startWidth-dx)+'px'; wrapper.style.left=(startLeft+dx)+'px';}
+if(dir.includes('n')){wrapper.style.height=(startHeight-dy)+'px'; wrapper.style.top=(startTop+dy)+'px';}}
+function onMouseUp(){document.removeEventListener('mousemove',onMouseMove); document.removeEventListener('mouseup',onMouseUp); scheduleSave();}
+document.addEventListener('mousemove',onMouseMove); document.addEventListener('mouseup',onMouseUp);});
+wrapper.appendChild(handle);});
+wrapper.addEventListener('click',e=>{if(!e.ctrlKey) selectedImages.forEach(w=> w.style.border='1px dashed rgba(34,197,94,0.5)');
+if(!selectedImages.includes(wrapper)) selectedImages.push(wrapper); wrapper.style.border='2px solid #22c55e';});
+wrapper.addEventListener('mousedown',function(e){if(e.target.className.includes('resize-handle')) return;
+e.preventDefault(); const startX=e.clientX,startY=e.clientY;
+const startLefts=selectedImages.map(w=>w.offsetLeft);
+const startTops=selectedImages.map(w=>w.offsetTop);
+function onMove(ev){let dx=ev.clientX-startX,dy=ev.clientY-startY; selectedImages.forEach((w,i)=>{w.style.position='absolute'; w.style.left=(startLefts[i]+dx)+'px'; w.style.top=(startTops[i]+dy)+'px';});}
+function onUp(){document.removeEventListener('mousemove',onMove); document.removeEventListener('mouseup',onUp); scheduleSave();}
+document.addEventListener('mousemove',onMove); document.addEventListener('mouseup',onUp);});
+});}
+editor.addEventListener('input',enableAdvancedImageEditing);
+editor.addEventListener('drop',()=>setTimeout(enableAdvancedImageEditing,100));
+editor.addEventListener('paste',()=>setTimeout(enableAdvancedImageEditing,100));
+enableAdvancedImageEditing();
+
+// ===== Informações de tamanho e status =====
+function updateStatus(){document.getElementById('sizeInfo').textContent=(new Blob([editor.innerHTML]).size)+' bytes'; document.getElementById('savedStatus').textContent='Salvo'}; updateStatus();
+</script>
+</body>
+</html>

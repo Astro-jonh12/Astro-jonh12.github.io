@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Conversor de Imagens</title>
+<style>
+  body {
+    font-family: Arial, sans-serif;
+    background: #0f172a;
+    color: #f1f5f9;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    min-height: 100vh;
+  }
+  .container {
+    max-width: 700px;
+    background: #1e293b;
+    padding: 20px;
+    margin: 20px;
+    border-radius: 10px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.4);
+  }
+  h1 {
+    text-align: center;
+    margin-bottom: 20px;
+    color: #38bdf8;
+  }
+  input, select, button {
+    margin: 10px 0;
+    padding: 10px;
+    width: 100%;
+    border-radius: 6px;
+    border: none;
+    font-size: 14px;
+  }
+  input[type="file"] {
+    background: #334155;
+    color: #f1f5f9;
+  }
+  select {
+    background: #334155;
+    color: #f1f5f9;
+  }
+  button {
+    background: #38bdf8;
+    color: #0f172a;
+    font-weight: bold;
+    cursor: pointer;
+    transition: 0.3s;
+  }
+  button:hover {
+    background: #0ea5e9;
+  }
+  .preview {
+    margin-top: 20px;
+    text-align: center;
+  }
+  .preview img {
+    max-width: 100%;
+    border-radius: 8px;
+    margin-top: 10px;
+    border: 1px solid #475569;
+  }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>Conversor de Imagens</h1>
+  <input type="file" id="fileInput" accept="image/*,.ico,.svg" multiple>
+  <select id="formatSelect">
+    <option value="png">PNG</option>
+    <option value="jpg">JPG</option>
+    <option value="jpeg">JPEG</option>
+    <option value="webp">WebP</option>
+    <option value="ico">ICO</option>
+    <option value="svg">SVG</option>
+  </select>
+  <button onclick="convertFiles()">Converter</button>
+  <div class="preview" id="preview"></div>
+</div>
+
+<script>
+function downloadBlob(blob, filename) {
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  a.click();
+}
+
+function loadImage(file) {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const img = new Image();
+      img.onload = () => resolve({img, data: reader.result});
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+async function convertFile(file, format) {
+  const baseName = file.name.split(".").slice(0, -1).join(".") || "convertido";
+
+  // SVG como entrada
+  if (file.type === "image/svg+xml" && format === "svg") {
+    downloadBlob(file, baseName + ".svg");
+    return;
+  }
+
+  // Se saída for SVG (raster -> svg)
+  if (format === "svg") {
+    const imgObj = await loadImage(file);
+    const w = imgObj.img.width, h = imgObj.img.height;
+    const svg = `
+<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}">
+  <image href="${imgObj.data}" width="${w}" height="${h}"/>
+</svg>`;
+    const blob = new Blob([svg], {type:"image/svg+xml"});
+    downloadBlob(blob, baseName + ".svg");
+    return;
+  }
+
+  // Saída ICO (gerar BMP dentro de ICO)
+  if (format === "ico") {
+    const imgObj = await loadImage(file);
+    const size = 32;
+    const canvas = document.createElement("canvas");
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext("2d");
+    ctx.drawImage(imgObj.img, 0, 0, size, size);
+
+    // Extrair pixels
+    const imageData = ctx.getImageData(0, 0, size, size).data;
+    const rowSize = Math.floor((32 * size + 31) / 32) * 4;
+    const pixelArraySize = rowSize * size;
+    const bmpSize = 40 + pixelArraySize;
+    const icoSize = 6 + 16 + bmpSize;
+
+    const buffer = new ArrayBuffer(icoSize);
+    const dv = new DataView(buffer);
+
+    // ICO header
+    dv.setUint16(0, 0, true);
+    dv.setUint16(2, 1, true);
+    dv.setUint16(4, 1, true);
+
+    // Dir entry
+    dv.setUint8(6, size);
+    dv.setUint8(7, size);
+    dv.setUint8(8, 0);
+    dv.setUint8(9, 0);
+    dv.setUint16(10, 1, true);
+    dv.setUint16(12, 32, true);
+    dv.setUint32(14, bmpSize, true);
+    dv.setUint32(18, 22, true);
+
+    // BMP header
+    dv.setUint32(22, 40, true);
+    dv.setInt32(26, size, true);
+    dv.setInt32(30, size * 2, true); // dobrado p/ máscara
+    dv.setUint16(34, 1, true);
+    dv.setUint16(36, 32, true);
+    dv.setUint32(38, 0, true);
+    dv.setUint32(42, pixelArraySize, true);
+    dv.setInt32(46, 0, true);
+    dv.setInt32(50, 0, true);
+    dv.setUint32(54, 0, true);
+    dv.setUint32(58, 0, true);
+
+    // Pixels BGRA invertido
+    let offset = 62;
+    for (let y = size - 1; y >= 0; y--) {
+      for (let x = 0; x < size; x++) {
+        const i = (y * size + x) * 4;
+        dv.setUint8(offset++, imageData[i + 2]);
+        dv.setUint8(offset++, imageData[i + 1]);
+        dv.setUint8(offset++, imageData[i + 0]);
+        dv.setUint8(offset++, imageData[i + 3]);
+      }
+    }
+
+    const blob = new Blob([buffer], { type: "image/x-icon" });
+    downloadBlob(blob, baseName + ".ico");
+    return;
+  }
+
+  // Demais formatos raster normais
+  const imgObj = await loadImage(file);
+  const canvas = document.createElement("canvas");
+  canvas.width = imgObj.img.width;
+  canvas.height = imgObj.img.height;
+  const ctx = canvas.getContext("2d");
+  ctx.drawImage(imgObj.img, 0, 0);
+  const mime = format === "jpg" ? "image/jpeg" : "image/" + format;
+  canvas.toBlob((blob) => {
+    downloadBlob(blob, baseName + "." + format);
+  }, mime, 0.92);
+}
+
+async function convertFiles() {
+  const files = document.getElementById("fileInput").files;
+  const format = document.getElementById("formatSelect").value;
+  if (!files.length) return alert("Selecione arquivos primeiro.");
+  for (let f of files) {
+    await convertFile(f, format);
+  }
+}
+</script>
+</body>
+</html>

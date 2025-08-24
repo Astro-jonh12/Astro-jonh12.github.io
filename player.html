@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Player MP4/MP3 Offline com Playlist</title>
+<style>
+  body { background: #121212; color: #fff; font-family: Arial, sans-serif; display: flex; flex-direction: column; align-items: center; padding: 20px; }
+  video, audio { width: 100%; max-width: 800px; margin-top: 20px; background: black; }
+  .controls { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin-top: 10px; }
+  button, input, select { background: #1f1f1f; color: white; border: 1px solid #555; padding: 5px; }
+  .range { width: 150px; }
+  ul { list-style: none; padding: 0; max-width: 800px; width: 100%; }
+  li { padding: 5px; cursor: pointer; border-bottom: 1px solid #333; }
+  li.active { background: #333; }
+</style>
+</head>
+<body>
+<h1>Player MP4/MP3 Offline</h1>
+<input type="file" id="fileInput" accept="video/*,audio/*" multiple>
+<video id="player" controls></video>
+<div class="controls">
+  <label>Velocidade: <input type="range" id="speed" min="0.25" max="4" step="0.25" value="1" class="range"></label>
+  <label>Volume: <input type="range" id="volume" min="0" max="1" step="0.01" value="1" class="range"></label>
+  <button id="mute">Mute</button>
+  <button id="backFrame">◀ Frame</button>
+  <button id="nextFrame">Frame ▶</button>
+  <button id="snapshot">Snapshot</button>
+  <button id="loopToggle">Loop</button>
+  <button id="fullscreen">Tela cheia</button>
+</div>
+<ul id="playlist"></ul>
+<canvas id="canvas" style="display:none"></canvas>
+<script>
+const player = document.getElementById('player');
+const fileInput = document.getElementById('fileInput');
+const playlist = document.getElementById('playlist');
+let files = [];
+let currentIndex = 0;
+
+function loadFile(index) {
+  const file = files[index];
+  if (!file) return;
+  const url = URL.createObjectURL(file);
+  player.src = url;
+  highlightActive(index);
+  currentIndex = index;
+}
+
+function highlightActive(index) {
+  Array.from(playlist.children).forEach((li, i) => {
+    li.classList.toggle('active', i === index);
+  });
+}
+
+fileInput.addEventListener('change', e => {
+  files = Array.from(e.target.files);
+  playlist.innerHTML = '';
+  files.forEach((file, index) => {
+    const li = document.createElement('li');
+    li.textContent = file.name;
+    li.addEventListener('click', () => loadFile(index));
+    playlist.appendChild(li);
+  });
+  if (files.length) loadFile(0);
+});
+
+player.addEventListener('ended', () => {
+  if (currentIndex < files.length - 1) {
+    loadFile(currentIndex + 1);
+    player.play();
+  }
+});
+
+speed.addEventListener('input', e => { player.playbackRate = e.target.value; });
+volume.addEventListener('input', e => { player.volume = e.target.value; });
+mute.addEventListener('click', () => { player.muted = !player.muted; });
+backFrame.addEventListener('click', () => { player.pause(); player.currentTime -= 1 / 30; });
+nextFrame.addEventListener('click', () => { player.pause(); player.currentTime += 1 / 30; });
+
+snapshot.addEventListener('click', () => {
+  const canvas = document.getElementById('canvas');
+  canvas.width = player.videoWidth;
+  canvas.height = player.videoHeight;
+  canvas.getContext('2d').drawImage(player, 0, 0);
+  const img = canvas.toDataURL('image/png');
+  const a = document.createElement('a');
+  a.href = img;
+  a.download = 'snapshot.png';
+  a.click();
+});
+
+let loopEnabled = false;
+loopToggle.addEventListener('click', () => {
+  loopEnabled = !loopEnabled;
+  player.loop = loopEnabled;
+  loopToggle.textContent = loopEnabled ? 'Loop On' : 'Loop Off';
+});
+
+fullscreen.addEventListener('click', () => {
+  if (player.requestFullscreen) player.requestFullscreen();
+});
+</script>
+</body>
+</html>
